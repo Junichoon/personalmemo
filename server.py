@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-import pymysql
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -14,15 +14,8 @@ ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 app.secret_key = os.environ.get("OPENCLAW_MEMO_SECRET", "change-this-secret")
 
-# MySQL connection settings
-MYSQL_CONFIG = {
-    "host": os.environ.get("MYSQL_HOST", "43.167.174.170"),
-    "port": int(os.environ.get("MYSQL_PORT", 32523)),
-    "user": os.environ.get("MYSQL_USER", "root"),
-    "password": os.environ.get("MYSQL_PASSWORD", "0e8ImKM39liy2Rd6tc7gCAf5D1GkTaq4"),
-    "database": os.environ.get("MYSQL_DATABASE", "zeabur"),
-    "charset": "utf8mb4",
-}
+# SQLite database path
+DB_PATH = ROOT / "personalmemo.db"
 
 LOGIN_EMAIL = "junichoon@gmail.com"
 LOGIN_HASH = "scrypt:32768:8:1$DZYpN0yDDJ9QJ1TF$33df9de05818ac68ed9af4762f41e651815c72e545f6e0c6da1a1f452208d1a35ab758e8d08ce0d02af6285f57f47f306709303ed85a473ee1ff972c17138878"
@@ -38,7 +31,8 @@ PUBLIC_PATHS = {
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+        db = g._database = sqlite3.connect(str(DB_PATH), detect_types=sqlite3.PARSE_DECLTYPES)
+        db.row_factory = sqlite3.Row
     return db
 
 
@@ -51,15 +45,15 @@ def close_connection(exception):
 
 def _init_db():
     """Initialize the database with required tables."""
-    db = pymysql.connect(**MYSQL_CONFIG)
+    db = sqlite3.connect(str(DB_PATH))
     cursor = db.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS memos (
-            id INT PRIMARY KEY AUTO_INCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT NOT NULL,
             timestamp TEXT NOT NULL,
             metadata TEXT,
-            deleted INT DEFAULT 0,
+            deleted INTEGER DEFAULT 0,
             deleted_at TEXT
         )
     ''')
@@ -95,7 +89,7 @@ def _save_items(items: List[Dict[str, Any]]) -> None:
     for item in items:
         cursor.execute('''
             INSERT INTO memos (id, content, timestamp, metadata, deleted)
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?)
         ''', (
             item.get("id"),
             item.get("content"),
@@ -208,7 +202,7 @@ def create_memo():
     
     cursor.execute('''
         INSERT INTO memos (content, timestamp, metadata)
-        VALUES (%s, %s, %s)
+        VALUES (?, ?, ?)
     ''', (content, now, metadata))
     db.commit()
     
@@ -226,7 +220,7 @@ def update_memo(memo_id: int):
     cursor = db.cursor()
     
     # Check if memo exists and not deleted
-    cursor.execute('SELECT id FROM memos WHERE id = %s AND deleted = 0', (memo_id,))
+    cursor.execute('SELECT id FROM memos WHERE id = ? AND deleted = 0', (memo_id,))
     if not cursor.fetchone():
         return jsonify({"error": "memo not found"}), 404
     
@@ -235,8 +229,8 @@ def update_memo(memo_id: int):
     
     cursor.execute('''
         UPDATE memos
-        SET content = %s, timestamp = %s, metadata = %s
-        WHERE id = %s AND deleted = 0
+        SET content = ?, timestamp = ?, metadata = ?
+        WHERE id = ? AND deleted = 0
     ''', (data.get("content", "").strip(), now, metadata, memo_id))
     db.commit()
     
@@ -253,8 +247,8 @@ def delete_memo(memo_id: int):
     now = datetime.now().isoformat(timespec="seconds")
     cursor.execute('''
         UPDATE memos
-        SET deleted = 1, deleted_at = %s
-        WHERE id = %s AND deleted = 0
+        SET deleted = 1, deleted_at = ?
+        WHERE id = ? AND deleted = 0
     ''', (now, memo_id))
     db.commit()
     
@@ -268,4 +262,4 @@ def delete_memo(memo_id: int):
 if __name__ == "__main__":
     # Initialize database on first run
     _init_db()
-    app.run(host="127.0.0.1", port=8081, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)

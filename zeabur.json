@@ -1,0 +1,20 @@
+{
+  "$schema": "https://zeabur.com/zeabur.json",
+  "build": {
+    "builder": "FLASK",
+    "language": "PYTHON",
+    "installCommand": "pip install -r requirements.txt",
+    "startCommand": "python server.py"
+  },
+  "environment": {
+    "PORT": "8080",
+    "MYSQL_HOST": "10.60.136.170",
+    "MYSQL_PORT": "3306",
+    "MYSQL_USER": "root",
+    "MYSQL_PASSWORD": "0e8ImKM39liy2Rd6tc7gCAf5D1GkTaq4",
+    "MYSQL_DATABASE": "personalmemo",
+    "OPENCLAW_MEMO_SECRET": "zeabur-deployment-2026"
+  },
+  "domains": [],
+  "port": 8080
+}
